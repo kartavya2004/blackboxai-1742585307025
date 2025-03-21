@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Billing System - Login</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-50 font-[Inter] min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full mx-4">
+        <!-- Login Card -->
+        <div class="bg-white shadow-lg rounded-lg p-8">
+            <!-- Logo/Title -->
+            <div class="text-center mb-8">
+                <h1 class="text-2xl font-bold text-gray-800">ERP Billing System</h1>
+                <p class="text-gray-600 mt-2">Login or Register your Enterprise</p>
+            </div>
+
+            <!-- Login/Register Form -->
+            <form id="auth-form" class="space-y-6">
+                <!-- Enterprise Name -->
+                <div>
+                    <label for="enterprise-name" class="block text-sm font-medium text-gray-700">Enterprise Name</label>
+                    <input type="text" id="enterprise-name" name="enterprise_name" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           placeholder="Enter your enterprise name">
+                </div>
+
+                <!-- Owner Name -->
+                <div>
+                    <label for="owner-name" class="block text-sm font-medium text-gray-700">Owner Name</label>
+                    <input type="text" id="owner-name" name="owner_name" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           placeholder="Enter owner's name">
+                </div>
+
+                <!-- Phone Number -->
+                <div>
+                    <label for="phone-number" class="block text-sm font-medium text-gray-700">Phone Number</label>
+                    <input type="tel" id="phone-number" name="phone_number" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           placeholder="Enter phone number">
+                </div>
+
+                <!-- Email (Optional) -->
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700">Email (Optional)</label>
+                    <input type="email" id="email" name="email"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           placeholder="Enter your email">
+                </div>
+
+                <!-- Address -->
+                <div>
+                    <label for="address" class="block text-sm font-medium text-gray-700">Business Address</label>
+                    <textarea id="address" name="address" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            rows="3" placeholder="Enter your business address"></textarea>
+                </div>
+
+                <!-- GST Number (Optional) -->
+                <div>
+                    <label for="gst-number" class="block text-sm font-medium text-gray-700">GST Number (Optional)</label>
+                    <input type="text" id="gst-number" name="gst_number"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           placeholder="Enter GST number">
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" id="password" name="password" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           placeholder="Enter password">
+                </div>
+
+                <!-- Confirm Password -->
+                <div>
+                    <label for="confirm-password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
+                    <input type="password" id="confirm-password" name="confirm_password" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           placeholder="Confirm your password">
+                </div>
+
+                <!-- Submit Button -->
+                <div>
+                    <button type="submit" id="auth-submit"
+                            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Register Enterprise
+                    </button>
+                </div>
+
+                <!-- Login Link -->
+                <div class="text-center text-sm">
+                    <p class="text-gray-600">
+                        Already registered? 
+                        <a href="#" id="toggle-auth" class="font-medium text-indigo-600 hover:text-indigo-500">
+                            Login here
+                        </a>
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 transform transition-transform duration-300 translate-y-full">
+        <div class="bg-white shadow-lg rounded-lg p-4 flex items-center space-x-3">
+            <i id="toast-icon" class="fas fa-check-circle text-green-500 text-xl"></i>
+            <p id="toast-message" class="text-sm text-gray-700"></p>
+        </div>
+    </div>
+
+    <!-- Custom JavaScript -->
+    <script src="login.js"></script>
+</body>
+</html>
