@@ -1,0 +1,197 @@
+/* Base styles */
+body.modal-open {
+    overflow: hidden;
+}
+
+/* Toast Notifications */
+#toast {
+    z-index: 9999;
+}
+
+.toast-show {
+    transform: translateY(0);
+    transition: transform 0.3s ease-in-out;
+}
+
+.toast-hide {
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out;
+}
+
+/* Modal Base Styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+.modal.show {
+    display: flex !important;
+}
+
+.modal-dialog {
+    background: white;
+    border-radius: 0.5rem;
+    width: 100%;
+    max-width: 600px;
+    margin: 1.5rem;
+    position: relative;
+    transform: translateY(0);
+    transition: transform 0.3s ease-out;
+}
+
+.modal-content {
+    max-height: calc(100vh - 3rem);
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+    padding: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-body {
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.modal-footer {
+    padding: 1rem;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+/* Inventory Selection List */
+#inventory-selection-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#inventory-selection-list > div {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+#inventory-selection-list > div:last-child {
+    border-bottom: none;
+}
+
+/* Form Controls */
+input[type="text"],
+input[type="number"],
+input[type="tel"],
+textarea,
+select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="tel"]:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Buttons */
+button {
+    transition: all 0.15s ease-in-out;
+}
+
+button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Section Transitions */
+.section {
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.section.active {
+    display: block;
+    opacity: 1;
+}
+
+/* Stock Status Colors */
+.text-red-600 {
+    color: #dc2626;
+}
+
+.text-yellow-600 {
+    color: #d97706;
+}
+
+.text-green-600 {
+    color: #059669;
+}
+
+/* Table Styles */
+.table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Navigation */
+.nav-link {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+    .modal-dialog {
+        margin: 1rem;
+        max-width: calc(100% - 2rem);
+    }
+    
+    .modal-body {
+        max-height: calc(100vh - 200px);
+    }
+}
+
+/* Animation Classes */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal.show .modal-dialog {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
