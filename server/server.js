@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+require('dotenv').config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -12,9 +13,13 @@ const customersRoutes = require('./routes/customers');
 const app = express();
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../client')));
+app.use(cors({
+    origin: '*',  
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -22,20 +27,17 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({
-            success: false,
-            message: 'Authentication token required'
-        });
+        console.error("🔴 No token received");
+        return res.status(401).json({ success: false, message: 'Authentication token required' });
     }
 
     jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
         if (err) {
-            return res.status(403).json({
-                success: false,
-                message: 'Invalid or expired token'
-            });
+            console.error("🔴 Invalid token:", err.message);
+            return res.status(403).json({ success: false, message: 'Invalid or expired token' });
         }
 
+        console.log("🟢 Token verified for user:", user);
         req.user = user;
         next();
     });
