@@ -93,14 +93,28 @@ const closeModal = (modalId) => {
 
 // Inventory Management
 const loadInventory = async () => {
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+        showToast('Please log in to access inventory', false);
+        return;
+    }
+
+    console.log("Sending Token:", authToken); // Debugging
+
     try {
-        const response = await fetch(ENDPOINTS.INVENTORY);
+        const response = await fetch(`${API_BASE_URL}/inventory`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
         const data = await response.json();
-        
+        console.log("Inventory Response:", data); // Debugging
+
         if (data.success) {
             inventoryItems = data.data;
             renderInventoryTable();
-            renderInventorySelection(); // Update selection modal if it's open
         } else {
             throw new Error(data.message);
         }
@@ -352,22 +366,78 @@ const updateBillSummary = () => {
     });
 };
 
+const addDownloadButton = (billId) => {
+    const billActions = document.getElementById('bill-actions');
+    if (!billActions) {
+        console.error("Error: 'bill-actions' element not found.");
+        return;
+    }
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.innerText = 'Download Invoice';
+    downloadBtn.classList.add('btn', 'btn-primary', 'mt-2');
+    downloadBtn.onclick = () => downloadBill(billId);
+
+    billActions.appendChild(downloadBtn);
+};
+
+const downloadBill = (billId) => {
+    const authToken = localStorage.getItem('authToken');  
+    if (!authToken) {
+        showToast('Please log in first', false);
+        return;
+    }
+
+    console.log("Using Token:", authToken); // Debugging
+
+    fetch(`${API_BASE_URL}/bills/download/${billId}`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${authToken}`,  // ✅ Ensure this is included
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Failed to download invoice: ${response.statusText}`);
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice_${billId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    })
+    .catch(error => showToast(`Download failed: ${error.message}`, false));
+};
+
 const generateBill = async () => {
     const customerName = document.getElementById('customer-name').value;
     const customerPhone = document.getElementById('customer-phone').value;
     const paymentMethod = document.getElementById('payment-method').value;
     const discountBeforeTax = parseFloat(document.getElementById('discount-before-tax').value) || 0;
 
-    if (!customerName || !customerPhone || billItems.length === 0) {
-        showToast('Please fill all required fields and add at least one item', false);
+    if (!customerName || !customerPhone) {
+        showToast('Please enter customer details', false);
+        return;
+    }
+
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+        showToast('Please log in to generate a bill', false);
         return;
     }
 
     try {
-        const response = await fetch(ENDPOINTS.BILLS, {
+        const response = await fetch(`${API_BASE_URL}/bills`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
             },
             body: JSON.stringify({
                 customer: {
@@ -383,15 +453,16 @@ const generateBill = async () => {
         const data = await response.json();
         
         if (data.success) {
-            showToast('Bill generated successfully');
-            
+            showToast('Bill generated successfully!');
+            addDownloadButton(data.data.id);
+
             // Enable WhatsApp sharing
             const shareButton = document.getElementById('share-whatsapp');
             if (shareButton) {
                 shareButton.style.display = 'inline-flex';
                 shareButton.onclick = () => window.open(data.data.whatsappUrl, '_blank');
             }
-
+            
             // Reset form
             resetBillForm();
             

@@ -106,10 +106,13 @@ const toggleAuthMode = () => {
 // Handle form submission
 const handleSubmit = async (event) => {
     event.preventDefault();
+    console.log("🔵 Form Submitted");
+
     const form = event.target;
     const formData = new FormData(form);
 
-    // Validate form
+    console.log("🔵 Form Data:", Object.fromEntries(formData));
+
     const errors = validateForm(formData);
     if (errors.length > 0) {
         showToast(errors[0], false);
@@ -118,16 +121,17 @@ const handleSubmit = async (event) => {
 
     try {
         const endpoint = isLoginMode ? ENDPOINTS.LOGIN : ENDPOINTS.REGISTER;
+        console.log(`🔵 Sending request to: ${endpoint}`);
+
         const response = await fetch(endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(Object.fromEntries(formData))
         });
 
         const data = await response.json();
-        
+        console.log("🔵 API Response:", data);
+
         if (data.success) {
             if (data.requiresOTP) {
                 isOtpSent = true;
@@ -135,21 +139,20 @@ const handleSubmit = async (event) => {
                 showOTPVerification();
                 showToast('OTP sent to your phone number');
             } else {
-                // Store auth token and enterprise details
                 localStorage.setItem('authToken', data.token);
                 localStorage.setItem('enterpriseDetails', JSON.stringify(data.enterprise));
-                
-                // Redirect to main application
+
+                showToast('Login successful!');
                 window.location.href = '/index.html';
             }
         } else {
             throw new Error(data.message);
         }
     } catch (error) {
+        console.error("🔴 Login error:", error);
         showToast(error.message, false);
     }
 };
-
 // Show OTP verification form
 const showOTPVerification = () => {
     const form = document.getElementById('auth-form');
@@ -268,10 +271,30 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleAuthMode();
     });
 
-    // Initialize form state
-    toggleAuthMode();
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log("🔵 DOM Loaded");
+        
+        const form = document.getElementById('auth-form');
+        const toggleLink = document.getElementById('toggle-auth');
+    
+        if (form) {
+            form.addEventListener('submit', handleSubmit);
+        } else {
+            console.error("🔴 Form not found");
+        }
+    
+        if (toggleLink) {
+            toggleLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleAuthMode();
+            });
+        } else {
+            console.error("🔴 Toggle link not found");
+        }
+    
+        toggleAuthMode();
+    });
 });
-
 // Check if user is already logged in
 const checkAuthStatus = () => {
     const authToken = localStorage.getItem('authToken');
