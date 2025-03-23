@@ -3,6 +3,7 @@ const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const fetch = require('node-fetch'); // Make sure to install node-fetch
 
 // Connect to SQLite database
 const db = new sqlite3.Database('./server/erp.db', (err) => {
@@ -63,7 +64,6 @@ router.post('/register', async (req, res) => {
                     message: 'Internal server error'
                 });
             }
-
             if (row) {
                 return res.status(400).json({
                     success: false,
@@ -71,22 +71,17 @@ router.post('/register', async (req, res) => {
                 });
             }
 
-            // Hash password
-            const hashedPassword = await bcrypt.hash(password, 10);
-
             // Generate OTP
             const otp = generateOTP();
             const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // OTP expires in 10 minutes
 
-            // Insert new enterprise
-            const sql = `
-                INSERT INTO enterprises (
-                    enterprise_name, owner_name, phone_number, email, 
-                    address, gst_number, password, otp, otp_expires_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
+            // Hash the password
+            const hashedPassword = await bcrypt.hash(password, 10);
 
-            db.run(sql, [
+            // Insert new enterprise
+            db.run(`INSERT INTO enterprises (
+                enterprise_name, owner_name, phone_number, email, address, gst_number, password, otp, otp_expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
                 enterprise_name,
                 owner_name,
                 phone_number,
@@ -96,7 +91,7 @@ router.post('/register', async (req, res) => {
                 hashedPassword,
                 otp,
                 otpExpiresAt.toISOString()
-            ], function(err) {
+            ], async (err) => {
                 if (err) {
                     console.error('Error inserting enterprise:', err);
                     return res.status(500).json({
@@ -105,21 +100,54 @@ router.post('/register', async (req, res) => {
                     });
                 }
 
-                // In a real application, send OTP via SMS
-                console.log('OTP for testing:', otp);
-
-                res.json({
-                    success: true,
-                    message: 'Enterprise registered successfully. Please verify your phone number.',
-                    requiresOTP: true
+                // Send OTP to user's phone number using Twilio
+                const otpMessage = `Your OTP is: ${otp}`;
+                const url = `https://api.twilio.com/2010-04-01/Accounts/your-twilio-account-sid/Messages.json`;
+                const headers = {
+                    'Authorization': 'Basic ' + Buffer.from('your-twilio-account-sid:your-twilio-account-token').toString('base64'),
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                };
+                const body = new URLSearchParams({
+                    'To': phone_number,
+                    'From': 'your-twilio-phone-number',
+                    'Body': otpMessage
                 });
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: headers,
+                        body: body
+                    });
+
+                    if (!response.ok) {
+                        console.error('Error sending OTP:', response.status);
+                        return res.status(500).json({
+                            success: false,
+                            message: 'Failed to send OTP'
+                        });
+                    }
+
+                    console.log('OTP sent successfully');
+                    return res.status(201).json({
+                        success: true,
+                        message: 'Enterprise registered successfully. Please verify your phone number.',
+                        requiresOTP: true
+                    });
+                } catch (error) {
+                    console.error('Error sending OTP:', error);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Failed to send OTP'
+                    });
+                }
             });
         });
     } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({
+        console.error('Error registering enterprise:', error);
+        return res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Failed to register enterprise'
         });
     }
 });
@@ -212,7 +240,7 @@ router.post('/resend-otp', (req, res) => {
     db.run(
         'UPDATE enterprises SET otp = ?, otp_expires_at = ? WHERE phone_number = ?',
         [otp, otpExpiresAt.toISOString(), phone_number],
-        function(err) {
+        async function(err) {
             if (err) {
                 console.error('Error updating OTP:', err);
                 return res.status(500).json({
@@ -228,82 +256,73 @@ router.post('/resend-otp', (req, res) => {
                 });
             }
 
-            // In a real application, send OTP via SMS
-            console.log('New OTP for testing:', otp);
-
-            res.json({
-                success: true,
-                message: 'OTP resent successfully'
+            // Send new OTP via SMS
+            const otpMessage = `Your new OTP is: ${otp}`;
+            const url = `https://api.twilio.com/2010-04-01/Accounts/your-twilio-account-sid/Messages.json`;
+            const headers = {
+                'Authorization': 'Basic ' + Buffer.from('your-twilio-account-sid:your-twilio-account-token').toString('base64'),
+                'Content-Type': 'application/x-www-form-urlencoded'
+            };
+            const body = new URLSearchParams({
+                'To': phone_number,
+                'From': 'your-twilio-phone-number',
+                'Body': otpMessage
             });
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: body
+                });
+
+                if (!response.ok) {
+                    console.error('Error sending new OTP:', response.status);
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Failed to send new OTP'
+                    });
+                }
+
+                console.log('New OTP sent successfully');
+                res.json({
+                    success: true,
+                    message: 'OTP resent successfully'
+                });
+            } catch (error) {
+                console.error('Error sending new OTP:', error);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to send new OTP'
+                });
+            }
         }
     );
 });
 
 // Login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     const { phone_number, password } = req.body;
 
     if (!phone_number || !password) {
-        return res.status(400).json({
-            success: false,
-            message: 'Please provide phone number and password'
-        });
+        return res.status(400).json({ success: false, message: 'Please provide phone number and password' });
     }
 
     db.get('SELECT * FROM enterprises WHERE phone_number = ?', [phone_number], async (err, enterprise) => {
         if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({
-                success: false,
-                message: 'Internal server error'
-            });
+            console.error('🔴 Database error:', err);
+            return res.status(500).json({ success: false, message: 'Internal server error' });
         }
 
         if (!enterprise) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid credentials'
-            });
+            console.warn('🔴 Enterprise not found for:', phone_number);
+            return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
-        // Check if enterprise is verified
-        if (!enterprise.is_verified) {
-            // Generate new OTP for unverified enterprise
-            const otp = generateOTP();
-            const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-            db.run(
-                'UPDATE enterprises SET otp = ?, otp_expires_at = ? WHERE id = ?',
-                [otp, otpExpiresAt.toISOString(), enterprise.id],
-                (err) => {
-                    if (err) {
-                        console.error('Error updating OTP:', err);
-                        return res.status(500).json({
-                            success: false,
-                            message: 'Internal server error'
-                        });
-                    }
-
-                    // In a real application, send OTP via SMS
-                    console.log('OTP for testing:', otp);
-
-                    return res.json({
-                        success: true,
-                        message: 'Please verify your phone number',
-                        requiresOTP: true
-                    });
-                }
-            );
-            return;
-        }
-
-        // Verify password
         const isValidPassword = await bcrypt.compare(password, enterprise.password);
         if (!isValidPassword) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid credentials'
-            });
+            console.warn('🔴 Incorrect password for:', phone_number);
+            return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
         // Generate JWT token
@@ -313,6 +332,8 @@ router.post('/login', (req, res) => {
             { expiresIn: '24h' }
         );
 
+        console.log('🟢 Login successful:', phone_number);
+        
         res.json({
             success: true,
             message: 'Logged in successfully',

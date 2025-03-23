@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { db, runQuery, getOne, getAll } = require('../database');
+const puppeteer = require('puppeteer');
+const jwt = require('jsonwebtoken'); // Missing import
+const fs = require('fs');
+const path = require('path');
 
 // Constants for tax rates
 const CGST_RATE = 0.09; // 9%
@@ -33,6 +37,93 @@ const generateBillText = (bill, customer, items) => {
     
     return encodeURIComponent(text);
 };
+
+const loadTemplate = async (bill, enterprise) => {
+    try {
+        let template = await fs.promises.readFile(path.join(__dirname, '../templates/invoice_template.html'), 'utf-8');
+
+        template = template.replace('{{bill_id}}', bill.id)
+            .replace('{{bill_date}}', new Date(bill.bill_date).toLocaleString())
+            .replace('{{status}}', bill.status || 'Unpaid')
+            .replace('{{customer_name}}', bill.customer_name)
+            .replace('{{customer_address}}', bill.customer_address || 'N/A')
+            .replace('{{customer_phone}}', bill.customer_phone)
+            .replace('{{enterprise_name}}', enterprise.enterprise_name)
+            .replace('{{enterprise_address}}', enterprise.address)
+            .replace('{{total}}', bill.total_amount)
+            .replace('{{items}}', JSON.parse(bill.items).map((item, index) => `
+                <tr>
+                    <th>${index + 1}</th>
+                    <td>${item.item_name}</td>
+                    <td>${item.quantity}</td>
+                    <td>₹${item.unit_price}</td>
+                    <td>₹${item.quantity * item.unit_price}</td>
+                </tr>`).join('')
+            );
+
+        return template;
+    } catch (error) {
+        console.error("Error loading template:", error);
+        return null;
+    }
+};
+
+const verifyAuth = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+        return res.status(401).json({ success: false, message: "Authentication token required" });
+    }
+
+    const token = authHeader.split(' ')[1];  
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).json({ success: false, message: "Invalid or expired token" });
+        }
+        req.user = decoded;
+        next();
+    });
+};
+// Generate and serve the PDF
+router.get('/download/:id', verifyAuth, async (req, res) => {
+    try {
+        const bill = await getOne(`
+            SELECT b.*, c.name AS customer_name, c.phone_number AS customer_phone, c.address AS customer_address
+            FROM bills b
+            JOIN customers c ON b.customer_id = c.id
+            WHERE b.id = ?`, 
+            [req.params.id]
+        );
+
+        if (!bill) return res.status(404).json({ success: false, message: 'Bill not found' });
+
+        const enterprise = await getOne('SELECT * FROM enterprises WHERE id = ?', [bill.enterprise_id]);
+        if (!enterprise) return res.status(404).json({ success: false, message: 'Enterprise not found' });
+
+        const htmlContent = await loadTemplate(bill, enterprise);
+        if (!htmlContent) return res.status(500).json({ success: false, message: 'Failed to load invoice template' });
+
+        const browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+        await browser.close();
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Length': pdfBuffer.length
+        });
+
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+        res.status(500).json({ success: false, message: 'Failed to generate PDF' });
+    }
+});
 
 // Get all bills
 router.get('/', async (req, res, next) => {
