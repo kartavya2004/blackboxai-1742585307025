@@ -40,13 +40,12 @@ const generateBillText = (bill, customer, items) => {
 
 const loadTemplate = async (bill, enterprise) => {
     try {
-        let template = await fs.promises.readFile(path.join(__dirname, '../templates/invoice_template.html'), 'utf-8');
+        let template = await fs.promises.readFile(path.join(__dirname, './templates/bill_template.html'), 'utf-8');
 
         template = template.replace('{{bill_id}}', bill.id)
             .replace('{{bill_date}}', new Date(bill.bill_date).toLocaleString())
             .replace('{{status}}', bill.status || 'Unpaid')
             .replace('{{customer_name}}', bill.customer_name)
-            .replace('{{customer_address}}', bill.customer_address || 'N/A')
             .replace('{{customer_phone}}', bill.customer_phone)
             .replace('{{enterprise_name}}', enterprise.enterprise_name)
             .replace('{{enterprise_address}}', enterprise.address)
@@ -104,18 +103,22 @@ router.get('/download/:id', verifyAuth, async (req, res) => {
         if (!htmlContent) return res.status(500).json({ success: false, message: 'Failed to load invoice template' });
 
         const browser = await puppeteer.launch({
-            headless: 'new',
+            headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
+
         const page = await browser.newPage();
         await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
         const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+
         await browser.close();
 
+        // ✅ FIXED: Set `Content-Disposition` for proper download
         res.set({
             'Content-Type': 'application/pdf',
-            'Content-Length': pdfBuffer.length
+            'Content-Length': pdfBuffer.length,
+            'Content-Disposition': `attachment; filename="invoice_${bill.id}.pdf"`
         });
 
         res.send(pdfBuffer);
@@ -178,6 +181,18 @@ router.get('/:id', async (req, res, next) => {
     }
 });
 
+const generateInvoiceNumber = async () => {
+    const lastInvoice = await getOne('SELECT invoice_number FROM bills ORDER BY id DESC LIMIT 1');
+    
+    if (!lastInvoice || !lastInvoice.invoice_number) {
+        return 'INV-00001'; // Start from first invoice
+    }
+
+    // Extract the numeric part and increment
+    const lastNumber = parseInt(lastInvoice.invoice_number.split('-')[1]) || 0;
+    return `INV-${String(lastNumber + 1).padStart(5, '0')}`;
+};
+
 // Create new bill
 router.post('/', async (req, res, next) => {
     try {
@@ -195,6 +210,7 @@ router.post('/', async (req, res, next) => {
                 message: 'Customer details, items, and payment method are required'
             });
         }
+        const invoiceNumber = await generateInvoiceNumber();
 
         // Start transaction
         await runQuery('BEGIN TRANSACTION');
@@ -253,11 +269,12 @@ router.post('/', async (req, res, next) => {
             // Create bill
             const result = await runQuery(`
                 INSERT INTO bills (
-                    customer_id, items, sub_total, discount_before_tax,
+                    invoice_number, customer_id, items, sub_total, discount_before_tax,
                     taxable_amount, cgst, sgst, total_amount, payment_method
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
-                customerRecord.id,
+                invoiceNumber,
+                customer.id,
                 JSON.stringify(items),
                 sub_total,
                 discount_before_tax,
@@ -268,6 +285,7 @@ router.post('/', async (req, res, next) => {
                 payment_method
             ]);
 
+
             // Get created bill
             const newBill = await getOne(`
                 SELECT b.*, c.name as customer_name, c.phone_number 
@@ -275,9 +293,17 @@ router.post('/', async (req, res, next) => {
                 JOIN customers c ON b.customer_id = c.id 
                 WHERE b.id = ?
             `, [result.lastID]);
+            
+            // ✅ Fix: Ensure newBill is not null before accessing items
+            if (!newBill) {
+                return res.status(404).json({ success: false, message: 'Bill not found' });
+            }
 
-            // Parse items JSON
-            newBill.items = JSON.parse(newBill.items);
+            console.log("New Bill Data:", newBill);
+console.log("Items Data:", newBill ? newBill.items : "No items");
+            
+            // ✅ Fix: Ensure items exist before parsing
+            newBill.items = newBill.items ? JSON.parse(newBill.items) : [];
 
             // Generate WhatsApp share URL
             const whatsappUrl = `https://api.whatsapp.com/send?text=${generateBillText(

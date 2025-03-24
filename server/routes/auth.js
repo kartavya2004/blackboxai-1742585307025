@@ -350,5 +350,27 @@ router.post('/login', async (req, res) => {
         });
     });
 });
+router.post('/refresh-token', (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const oldToken = authHeader && authHeader.split(' ')[1];
+
+    if (!oldToken) {
+        return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    jwt.verify(oldToken, process.env.JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ success: false, message: 'Invalid or expired token' });
+
+        // Issue new token
+        const newToken = jwt.sign(
+            { id: user.id, phone_number: user.phone_number },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' } // Set token expiration time
+        );
+
+        res.json({ success: true, token: newToken });
+    });
+});
+
 
 module.exports = router;

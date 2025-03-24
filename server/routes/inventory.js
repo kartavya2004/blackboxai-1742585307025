@@ -13,11 +13,15 @@ const generateItemCode = async () => {
 router.get('/', async (req, res, next) => {
     try {
         const inventory = await getAll('SELECT * FROM inventory ORDER BY item_name ASC');
+        if (!inventory || inventory.length === 0) { 
+            return res.json({ success: true, data: [] }); 
+        }
         res.json({
             success: true,
             data: inventory
         });
     } catch (err) {
+        console.error("Inventory Fetch Error:", err);
         next(err);
     }
 });
@@ -59,17 +63,18 @@ router.post('/', async (req, res, next) => {
         // Generate unique item code
         const item_code = await generateItemCode();
 
-        // Create new inventory item
+        // Insert item into the database
         const result = await runQuery(
             'INSERT INTO inventory (item_code, item_name, description, price, quantity) VALUES (?, ?, ?, ?, ?)',
             [item_code, item_name, description || '', price, quantity]
         );
 
+        // Get the newly added item
         const newItem = await getOne('SELECT * FROM inventory WHERE id = ?', [result.lastID]);
 
         res.status(201).json({
             success: true,
-            message: 'Inventory item created successfully',
+            message: 'Inventory item added successfully',
             data: newItem
         });
     } catch (err) {
@@ -131,7 +136,7 @@ router.patch('/:id/quantity', async (req, res, next) => {
             });
         }
 
-        // Check if item exists and get current quantity
+        // Check if the item exists
         const item = await getOne('SELECT * FROM inventory WHERE id = ?', [id]);
         if (!item) {
             return res.status(404).json({
@@ -146,6 +151,7 @@ router.patch('/:id/quantity', async (req, res, next) => {
             [quantity, id]
         );
 
+        // Fetch updated item
         const updatedItem = await getOne('SELECT * FROM inventory WHERE id = ?', [id]);
 
         res.json({
