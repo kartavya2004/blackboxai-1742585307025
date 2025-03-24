@@ -90,6 +90,68 @@ const closeModal = (modalId) => {
     document.body.classList.remove('modal-open');
     console.log('Modal classes after hide:', modal.className);
 };
+const refreshAuthToken = async () => {
+    const authToken = localStorage.getItem('authToken');
+
+    if (!authToken) return null;
+
+    try {
+        const response = await fetchWithAuth(`${API_BASE_URL}/auth/refresh-token`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            localStorage.setItem('authToken', data.token);
+            return data.token;
+        } else {
+            throw new Error('Token refresh failed');
+        }
+    } catch (error) {
+        console.error("🔴 Token refresh error:", error);
+        localStorage.removeItem('authToken'); // Remove expired token
+        return null;
+    }
+};
+
+// ✅ Add `fetchWithAuth()` here in `app.js`
+const fetchWithAuth = async (url, options = {}) => {
+    let authToken = localStorage.getItem('authToken');
+
+    if (!authToken) {
+        showToast('Session expired. Please log in again.', false);
+        return null;
+    }
+
+    // Add Authorization header
+    options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${authToken}`
+    };
+
+    let response = await fetch(url, options);
+
+    if (response.status === 403) { // If token is expired
+        console.warn("🔴 Token expired. Attempting to refresh...");
+        authToken = await refreshAuthToken();
+
+        if (!authToken) {
+            showToast('Session expired. Please log in again.', false);
+            return null;
+        }
+
+        // Retry the request with new token
+        options.headers['Authorization'] = `Bearer ${authToken}`;
+        response = await fetch(url, options);
+    }
+
+    return response.json();
+};
 
 // Inventory Management
 const loadInventory = async () => {
@@ -99,10 +161,8 @@ const loadInventory = async () => {
         return;
     }
 
-    console.log("Sending Token:", authToken); // Debugging
-
     try {
-        const response = await fetch(`${API_BASE_URL}/inventory`, {
+        const response = await fetchWithAuth(ENDPOINTS.INVENTORY, {
             headers: {
                 'Authorization': `Bearer ${authToken}`,
                 'Content-Type': 'application/json'
@@ -112,11 +172,11 @@ const loadInventory = async () => {
         const data = await response.json();
         console.log("Inventory Response:", data); // Debugging
 
-        if (data.success) {
+        if (data.success && Array.isArray(data.data)) {
             inventoryItems = data.data;
-            renderInventoryTable();
+            renderInventoryTable();  // ✅ FIXED: Ensures UI Updates
         } else {
-            throw new Error(data.message);
+            showToast("No inventory items found", false);
         }
     } catch (error) {
         showToast(`Failed to load inventory: ${error.message}`, false);
@@ -159,18 +219,32 @@ const getStockColorClass = (quantity) => {
 };
 
 const showAddInventoryModal = () => {
-    showModal('add-inventory-modal');
-    document.getElementById('add-inventory-form').reset();
+    const modal = document.getElementById('add-inventory-modal');
+    if (modal) {
+        modal.classList.add('show'); // ✅ Ensure the modal is visible
+        modal.classList.remove('hidden');
+        document.getElementById('add-inventory-form').reset(); // Reset form on open
+    } else {
+        console.error("Modal not found: add-inventory-modal");
+    }
 };
-
 const closeAddInventoryModal = () => {
-    closeModal('add-inventory-modal');
-    document.getElementById('add-inventory-form').reset();
+    const modal = document.getElementById('add-inventory-modal');
+    if (modal) {
+        modal.classList.remove('show'); // Hide the modal
+        modal.classList.add('hidden');
+    }
 };
 
 const saveInventoryItem = async (event) => {
     event.preventDefault();
     
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+        showToast('Please log in to add inventory items', false);
+        return;
+    }
+
     const form = document.getElementById('add-inventory-form');
     if (!form.checkValidity()) {
         showToast('Please fill all required fields correctly', false);
@@ -186,9 +260,10 @@ const saveInventoryItem = async (event) => {
     };
 
     try {
-        const response = await fetch(ENDPOINTS.INVENTORY, {
+        const response = await fetchWithAuth(ENDPOINTS.INVENTORY, {
             method: 'POST',
             headers: {
+                'Authorization': `Bearer ${authToken}`,  // ✅ FIXED: Added Auth Token
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(data)
@@ -266,25 +341,34 @@ const addSelectedItems = () => {
         return checkbox && checkbox.checked;
     });
 
+    console.log("Selected Items:", selectedItems); // Debugging
+
     selectedItems.forEach(item => {
         const quantityInput = document.getElementById(`quantity-item-${item.id}`);
         const quantity = parseInt(quantityInput?.value || 1);
+        console.log(`Item: ${item.item_name}, Quantity: ${quantity}`); // Debugging
+
         if (quantity > 0 && quantity <= item.quantity) {
-            billItems.push({
-                id: Date.now(),
-                inventory_id: item.id,
-                item_name: item.item_name,
-                quantity: quantity,
-                unit_price: item.price
-            });
+            const existingItem = billItems.find(billItem => billItem.inventory_id === item.id);
+            if (existingItem) {
+                existingItem.quantity += quantity; // Update quantity if item already exists
+            } else {
+                billItems.push({
+                    id: Date.now(),
+                    inventory_id: item.id,
+                    item_name: item.item_name,
+                    quantity: quantity,
+                    unit_price: item.price
+                });
+            }
         }
     });
 
-    renderBillItems();
-    closeInventoryModal();
-    updateBillSummary();
+    console.log("Bill Items After Addition:", billItems); // Debugging
+    renderBillItems(); // Update the bill display
+    closeInventoryModal(); // Close the modal after adding items
+    updateBillSummary(); // Update the summary
 };
-
 const renderBillItems = () => {
     const tbody = document.getElementById('bill-items');
     if (!tbody) return; // Exit if we're not on the billing page
@@ -433,7 +517,7 @@ const generateBill = async () => {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/bills`, {
+        const response = await fetchWithAuth(`${API_BASE_URL}/bills`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -454,7 +538,7 @@ const generateBill = async () => {
         
         if (data.success) {
             showToast('Bill generated successfully!');
-            addDownloadButton(data.data.id);
+            showDownloadAndShareButtons(data.data.invoice_number, data.data.whatsappUrl);
 
             // Enable WhatsApp sharing
             const shareButton = document.getElementById('share-whatsapp');
@@ -473,6 +557,35 @@ const generateBill = async () => {
         }
     } catch (error) {
         showToast(`Failed to generate bill: ${error.message}`, false);
+    }
+};
+const showDownloadAndShareButtons = (invoiceNumber, whatsappUrl) => {
+    console.log("Invoice Number:", invoiceNumber);
+    console.log("WhatsApp URL:", whatsappUrl);
+
+    const downloadButton = document.getElementById('download-invoice');
+    const whatsappButton = document.getElementById('share-whatsapp');
+
+    if (downloadButton) {
+        downloadButton.onclick = () => {
+            if (invoiceNumber) {
+                console.log("Downloading:", invoiceNumber);
+                window.location.href = `${API_BASE_URL}/bills/download/${invoiceNumber}`;
+            } else {
+                showToast("No invoice available for download", false);
+            }
+        };
+    }
+
+    if (whatsappButton) {
+        whatsappButton.onclick = () => {
+            if (whatsappUrl) {
+                console.log("Sharing on WhatsApp:", whatsappUrl);
+                window.open(whatsappUrl, '_blank');
+            } else {
+                showToast("No WhatsApp link available", false);
+            }
+        };
     }
 };
 
